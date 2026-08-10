@@ -1269,14 +1269,14 @@ def plot_curriculum_improvement(
         exclude_outliers=False,
 ):
     """
-    Plot mean % improvement of Curriculum over Plain across all ontologies.
+    Plot mean absolute difference (Plain − Curriculum) in violations across all ontologies.
 
     Single plot with:
-    - Lines: Per-ontology % improvement (2 lines per ontology: sub + dis)
+    - Lines: Per-ontology difference (2 lines per ontology: sub + dis)
     - Bars: Average across all ontologies
 
-    Positive % = Curriculum has fewer violations (improvement).
-    Negative % = Curriculum has more violations (worse than Plain).
+    Positive values = Curriculum has fewer violations than Plain (improvement).
+    Negative values = Curriculum has more violations than Plain (worse).
 
     Args:
         exclude_outliers: If True, exclude extreme outliers (e.g., GO dim 2) from mean calculation
@@ -1339,8 +1339,15 @@ def plot_curriculum_improvement(
             p_dis = _extract_metrics_from_result(plain[d], d)['dis_viol']
             c_dis = _extract_metrics_from_result(curr[d], d)['dis_viol']
 
-            sub_imp = ((p_sub - c_sub) / p_sub * 100) if p_sub > 0 else (0.0 if c_sub == 0 else -100.0)
-            dis_imp = ((p_dis - c_dis) / p_dis * 100) if p_dis > 0 else (0.0 if c_dis == 0 else -100.0)
+            # Symmetric % change: +100 = perfect improvement, -100 = complete deterioration
+            if p_sub > 0 or c_sub > 0:
+                sub_imp = (p_sub - c_sub) / max(p_sub, c_sub, 1e-9) * 100
+            else:
+                sub_imp = 0.0
+            if p_dis > 0 or c_dis > 0:
+                dis_imp = (p_dis - c_dis) / max(p_dis, c_dis, 1e-9) * 100
+            else:
+                dis_imp = 0.0
 
             sub_by_onto[onto_name].append(sub_imp)
             dis_by_onto[onto_name].append(dis_imp)
@@ -1354,9 +1361,9 @@ def plot_curriculum_improvement(
         dis_vals = [v for v in [dis_by_onto[o][i] for o in onto_data] if v is not None]
 
         # Exclude extreme outliers if requested (e.g., GO at dim 2)
-        if exclude_outliers and d == 2:
-            sub_vals = [v for v in sub_vals if v > -500]  # Exclude extreme negative
-            dis_vals = [v for v in dis_vals if v > -500]
+        if exclude_outliers:
+            sub_vals = [v for v in sub_vals if v > -100]  # Exclude extreme negative
+            dis_vals = [v for v in dis_vals if v > -100]
 
         sub_means.append(np.mean(sub_vals) if sub_vals else 0)
         dis_means.append(np.mean(dis_vals) if dis_vals else 0)
@@ -1398,24 +1405,8 @@ def plot_curriculum_improvement(
     # Zero line
     ax.axhline(y=0, color='black', linestyle='-', linewidth=1.5, alpha=0.5)
 
-    # Y-axis scaling: focus on positive range (improvements) while keeping negatives visible
-    all_sub = [v for vals in sub_by_onto.values() for v in vals if v is not None]
-    all_dis = [v for vals in dis_by_onto.values() for v in vals if v is not None]
-    all_vals = all_sub + all_dis
-
-    min_val = min(all_vals) if all_vals else -100
-    max_val = max(all_vals) if all_vals else 100
-
-    # Focus on positive range: show full positive spectrum, compress negative
-    # Set upper limit slightly above max positive value
-    ylim_high = max(max_val * 1.15, 50)
-
-    # For lower limit: show enough to see negative values, but don't let extreme negatives dominate
-    # Use 25% of the positive range for negative space, or show down to -200 if needed
-    negative_buffer = max(abs(min_val) * 0.3, 150)
-    ylim_low = -negative_buffer
-
-    ax.set_ylim(ylim_low, ylim_high)
+    # Y-axis scaling: symmetric ±100% range
+    ax.set_ylim(-105, 105)
 
     # Collect and display off-scale values (very negative improvements)
     off_scale = []
@@ -1423,9 +1414,9 @@ def plot_curriculum_improvement(
         sub_vals = sub_by_onto[onto_name]
         dis_vals = dis_by_onto[onto_name]
         for i, d in enumerate(dims):
-            if sub_vals[i] is not None and sub_vals[i] < -200:
+            if sub_vals[i] is not None and sub_vals[i] < -100:
                 off_scale.append(f'{onto_name} dim {d} (Sub): {sub_vals[i]:.0f}%')
-            if dis_vals[i] is not None and dis_vals[i] < -200:
+            if dis_vals[i] is not None and dis_vals[i] < -100:
                 off_scale.append(f'{onto_name} dim {d} (Dis): {dis_vals[i]:.0f}%')
 
     if off_scale:
