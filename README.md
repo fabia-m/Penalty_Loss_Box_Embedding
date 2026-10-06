@@ -11,6 +11,7 @@ loss-function/
 ├── functions.py                 # core library: OWL loading, training, evaluation
 ├── penalty_model.ipynb          # experiment notebook (all four ontologies)
 ├── EXPERIMENT_SETUP.md          # complete experimental configuration
+├── schedule_alternatives_run.py # curriculum schedule ablation (S0–S5)
 ├── requirements.txt
 └── README.md
 ```
